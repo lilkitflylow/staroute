@@ -1,0 +1,7 @@
+{
+  "name": "中本星航",
+  "description": "A philanthropic mobile application for Shanghai 'Zhongben' (vocational-undergraduate) program applicants, providing major discovery, AI-driven recommendations, score trend analysis, and interactive path mapping.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
