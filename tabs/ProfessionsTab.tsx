@@ -11,159 +11,201 @@ interface ProfessionsTabProps {
 }
 
 const PAGE_SIZE = 10;
-type ScoreRange = '全部' | '640分以上' | '600-640分' | '600分以下';
+type ScoreRange = '全部' | '>640' | '620-640' | '600-620' | '<600';
+
+const Sparkline: React.FC<{ scores: { '2023': number; '2024': number; '2025': number } }> = ({ scores }) => {
+  const data = [scores['2023'], scores['2024'], scores['2025']];
+  const validData = data.filter(s => s > 0);
+  if (validData.length < 2) return null;
+
+  const min = Math.min(...validData) - 5;
+  const max = Math.max(...validData) + 5;
+  const height = 24;
+  const width = 60;
+  
+  const points = data.map((val, idx) => {
+    if (val === 0) return null;
+    const x = (idx / (data.length - 1)) * width;
+    const y = height - ((val - min) / (max - min)) * height;
+    return `${x},${y}`;
+  }).filter(p => p).join(' ');
+
+  const lastVal = data[2];
+  const prevVal = data[1] || data[0];
+  const color = lastVal >= prevVal ? '#10B981' : '#EF4444';
+
+  return (
+    <svg width={width} height={height} className="overflow-visible">
+      <polyline points={points} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={width} cy={height - ((lastVal - min) / (max - min)) * height} r="2.5" fill={color} />
+    </svg>
+  );
+};
 
 const ProfessionsTab: React.FC<ProfessionsTabProps> = ({ onSelectMajor, favorites, toggleFavorite }) => {
-  const [activeCategory, setActiveCategory] = useState<Category | '全部'>('全部');
+  const [activeCategory, setActiveCategory] = useState<Category | '全'>('全');
   const [scoreFilter, setScoreFilter] = useState<ScoreRange>('全部');
-  const [subjectType, setSubjectType] = useState<'全部' | '理科' | '文科' | '综合'>('全部');
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  const categories = Object.values(Category);
+
   const filtered = useMemo(() => {
     return MAJORS_DATA.filter(m => {
-      // Category Filter
-      const matchCat = activeCategory === '全部' || m.category === activeCategory;
-      
-      // Subject Filter
-      const matchSub = subjectType === '全部' || m.subjectType === subjectType;
-      
-      // Score Filter
-      const score = m.scores[2024].min;
+      const matchCat = activeCategory === '全' || m.category === activeCategory;
+      const score = m.scores['2025'];
       let matchScore = true;
-      if (scoreFilter === '640分以上') matchScore = score >= 640;
-      else if (scoreFilter === '600-640分') matchScore = score >= 600 && score < 640;
-      else if (scoreFilter === '600分以下') matchScore = score < 600;
-
-      return matchCat && matchSub && matchScore;
+      if (scoreFilter === '>640') matchScore = score > 640;
+      else if (scoreFilter === '620-640') matchScore = score >= 620 && score <= 640;
+      else if (scoreFilter === '600-620') matchScore = score >= 600 && score < 620;
+      else if (scoreFilter === '<600') matchScore = score < 600;
+      return matchCat && matchScore;
     });
-  }, [activeCategory, subjectType, scoreFilter]);
+  }, [activeCategory, scoreFilter]);
 
   const displayed = filtered.slice(0, page * PAGE_SIZE);
 
   return (
     <div className="flex flex-col h-full bg-[#F2F2F7]">
-      {/* Apple-style Header */}
-      <div className="px-5 pt-4 pb-2 z-20 sticky top-0 bg-[#F2F2F7]/90 backdrop-blur-xl">
-        <h1 className="text-2xl font-bold text-black mb-3">专业库</h1>
-
-        {/* Filter Scroll Container */}
-        <div className="flex flex-col gap-3">
+      {/* 1. Compact Category Filter */}
+      <div className="bg-white pb-2 shadow-sm z-20">
+        <div className="flex w-full h-16 px-1 pt-2 gap-1 overflow-x-auto hide-scrollbar">
+          {/* 'All' Tab */}
+          <button 
+            onClick={() => { setActiveCategory('全'); setPage(1); }}
+            className={`shrink-0 w-10 h-14 rounded-xl transition-all duration-300 flex items-center justify-center shadow-sm ${activeCategory === '全' ? 'bg-black text-white' : 'bg-gray-50 text-gray-400'}`}
+          >
+             <span className="text-sm font-black">全</span>
+          </button>
           
-          {/* Row 1: Category Pills */}
-          <div className="flex gap-2 overflow-x-auto hide-scrollbar">
-            <button onClick={() => { setActiveCategory('全部'); setPage(1); }} className={`shrink-0 px-4 py-2 rounded-full text-[13px] font-semibold transition-all ${activeCategory === '全部' ? 'bg-[#1D1D1F] text-white shadow-md' : 'bg-white text-gray-500 shadow-sm'}`}>全部</button>
-            {Object.values(Category).map(cat => (
-              <button key={cat} onClick={() => { setActiveCategory(cat); setPage(1); }} 
-                className={`shrink-0 px-4 py-2 rounded-full text-[13px] font-semibold transition-all shadow-sm`}
-                style={{ background: activeCategory === cat ? CATEGORY_COLORS[cat] : '#FFFFFF', color: activeCategory === cat ? 'black' : '#6E6E73' }}>
-                {cat}
+          {/* Categories Tabs */}
+          {categories.map((cat) => {
+            const isActive = activeCategory === cat;
+            return (
+              <button
+                key={cat}
+                onClick={() => { setActiveCategory(cat); setPage(1); }}
+                className={`flex-1 min-w-[3rem] h-14 rounded-xl transition-all duration-300 flex flex-col items-center justify-center shadow-sm ${isActive ? 'scale-105 z-10' : 'opacity-70 grayscale'}`}
+                style={{ background: isActive ? CATEGORY_COLORS[cat] : '#F9F9FB' }}
+              >
+                <div className={`text-[11px] font-bold text-center ${isActive ? 'text-white' : 'text-gray-500'}`}>
+                   {cat.substring(0,2)}<br/>{cat.substring(2)}
+                </div>
               </button>
-            ))}
-          </div>
-
-          {/* Row 2: Functional Filters (Subject & Score) */}
-          <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-2">
-             {/* Subject Switch */}
-             <div className="flex bg-white rounded-full p-1 shadow-sm shrink-0">
-               {['全部', '理科', '文科', '综合'].map(t => (
-                 <button key={t} onClick={() => setSubjectType(t as any)} 
-                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold transition-all ${subjectType === t ? 'bg-[#F2F2F7] text-black shadow-sm' : 'text-gray-400'}`}>
-                   {t}
-                 </button>
-               ))}
-             </div>
-
-             {/* Score Dropdown Simulation */}
-             <div className="flex bg-white rounded-full p-1 shadow-sm shrink-0">
-               {['全部', '640分以上', '600-640分', '600分以下'].map(s => (
-                  <button key={s} onClick={() => setScoreFilter(s as any)}
-                    className={`px-3 py-1.5 rounded-full text-[11px] font-bold transition-all whitespace-nowrap ${scoreFilter === s ? 'bg-[#007AFF] text-white shadow-sm' : 'text-gray-400'}`}>
-                    {s}
-                  </button>
-               ))}
-             </div>
-          </div>
+            );
+          })}
+        </div>
+        
+        {/* Toolbar */}
+        <div className="flex justify-between items-center px-4 mt-1">
+          <span className="text-[10px] font-bold text-gray-400">共 {filtered.length} 个专业</span>
+          <select 
+             value={scoreFilter} 
+             onChange={(e) => setScoreFilter(e.target.value as ScoreRange)}
+             className="bg-gray-100 rounded-md text-[10px] font-bold px-2 py-1 border-none focus:ring-0 text-blue-600"
+          >
+            <option value="全部">分数不限</option>
+            <option value=">640">640分以上</option>
+            <option value="620-640">620-640分</option>
+            <option value="600-620">600-620分</option>
+            <option value="<600">600分以下</option>
+          </select>
         </div>
       </div>
 
-      {/* List Content */}
-      <div className="flex-1 overflow-y-auto hide-scrollbar px-4 pb-32 pt-2 space-y-3">
+      {/* 2. Compressed One-Line List Content */}
+      <div className="flex-1 overflow-y-auto hide-scrollbar px-3 py-3 space-y-2.5">
         {displayed.map(major => {
-          const score2025 = major.scores[2024].min; // Using 2024 data as placeholder for 2025 as per current data structure
+          const isFav = !!favorites.find(f => f.id === major.id);
           const isExpanded = expandedId === major.id;
 
           return (
-            <div key={major.id} className="bg-white rounded-[24px] shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden transition-all duration-300">
-              <div className="p-5 cursor-pointer flex items-start justify-between active:bg-gray-50" onClick={() => setExpandedId(isExpanded ? null : major.id)}>
-                
-                {/* Left: Info */}
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="px-2 py-0.5 bg-gray-100 rounded-md text-[10px] font-bold text-gray-500">代码 {major.schoolCode}</span>
-                    <span className="px-2 py-0.5 bg-gray-100 rounded-md text-[10px] font-bold text-gray-500">{major.subjectType}</span>
-                    <div className="w-2 h-2 rounded-full" style={{ background: CATEGORY_COLORS[major.category] }} />
-                  </div>
-                  <h3 className="text-[17px] font-bold text-[#1D1D1F] leading-tight">{major.name}</h3>
-                  <p className="text-[13px] font-medium text-[#86868B]">{major.vocationalSchool}</p>
-                </div>
-
-                {/* Right: Score */}
-                <div className="flex flex-col items-end">
-                   <p className="text-[10px] font-bold text-[#86868B] mb-0.5">25分数线</p>
-                   <p className="text-[22px] font-bold text-[#1D1D1F] tracking-tight">{score2025}</p>
-                </div>
-              </div>
-
-              {/* Expanded Detail View */}
-              {isExpanded && (
-                <div className="px-5 pb-5 animate-in slide-in-from-top-2 fade-in duration-200">
-                  <div className="h-px w-full bg-gray-100 mb-4" />
-                  
-                  <div className="grid grid-cols-2 gap-3 mb-5">
-                    <div className="p-3 bg-[#F2F2F7] rounded-xl">
-                      <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">贯通本科</p>
-                      <p className="text-[13px] font-bold text-[#1D1D1F]">{major.undergradSchool}</p>
+            <div key={major.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-300">
+                {/* Main Row */}
+                <div 
+                    onClick={() => setExpandedId(isExpanded ? null : major.id)}
+                    className="px-4 py-3.5 flex items-center justify-between active:bg-gray-50 cursor-pointer"
+                >
+                  <div className="flex items-center flex-1 min-w-0 gap-3">
+                    {/* Name */}
+                    <div className="w-[4.5rem] shrink-0">
+                        <span className="text-[13px] font-extrabold text-[#1D1D1F] block truncate">{major.name}</span>
                     </div>
-                    <div className="p-3 bg-[#F2F2F7] rounded-xl">
-                      <p className="text-[10px] text-gray-400 font-bold uppercase mb-1">学费标准</p>
-                      <p className="text-[13px] font-bold text-[#1D1D1F]">{major.tuition === '0' ? '免学费' : `${major.tuition}元/年`}</p>
+
+                    {/* Schools (Combined) */}
+                    <div className="flex-1 min-w-0 flex items-center gap-1.5 text-[11px] font-medium text-gray-500">
+                       <span className="truncate max-w-[6rem]">{major.vocationalSchool}</span>
+                       <span className="text-gray-300">/</span>
+                       <span className="truncate max-w-[6rem] text-blue-600">{major.undergradSchool}</span>
                     </div>
                   </div>
 
-                  <div className="flex gap-3">
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); toggleFavorite(major); }} 
-                      className={`flex-1 h-11 rounded-xl text-[13px] font-bold flex items-center justify-center gap-2 transition-all ${favorites.find(f => f.id === major.id) ? 'bg-[#FF2D55] text-white shadow-lg shadow-red-200' : 'bg-white border border-gray-200 text-gray-600'}`}>
-                      {favorites.find(f => f.id === major.id) ? (
-                        <><span>✓</span> 已收藏</>
-                      ) : (
-                        <><span>+</span> 加入收藏</>
-                      )}
-                    </button>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); onSelectMajor(major); }} 
-                      className="flex-1 h-11 bg-[#007AFF] text-white rounded-xl text-[13px] font-bold shadow-lg shadow-blue-200 flex items-center justify-center">
-                      地图定位
-                    </button>
+                  {/* Score & Star */}
+                  <div className="shrink-0 flex items-center gap-3 pl-2 border-l border-gray-100 ml-2">
+                      <div className="text-right">
+                        <span className="text-[15px] font-black text-[#1D1D1F] block leading-none">{major.scores['2025']}</span>
+                        <span className="text-[8px] text-gray-400 block mt-0.5">25年</span>
+                      </div>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); toggleFavorite(major); }}
+                        className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${isFav ? 'bg-red-50 text-red-500' : 'bg-gray-50 text-gray-300 hover:bg-gray-100'}`}
+                      >
+                         <span className="text-base leading-none">{isFav ? '♥' : '♡'}</span>
+                      </button>
                   </div>
                 </div>
-              )}
+
+                {/* Inline Expanded Dropdown Card */}
+                {isExpanded && (
+                    <div className="bg-gray-50/50 border-t border-gray-100 px-5 py-4 animate-in slide-in-from-top-2 duration-200">
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <span className="text-[10px] text-gray-400 block mb-0.5">专业名称</span>
+                                <span className="text-sm font-bold text-black">{major.professionalName}</span>
+                            </div>
+                            <div>
+                                <span className="text-[10px] text-gray-400 block mb-0.5">志愿名称</span>
+                                <span className="text-sm font-bold text-black">{major.name}</span>
+                            </div>
+                            <div>
+                                <span className="text-[10px] text-gray-400 block mb-0.5">招生代码</span>
+                                <span className="text-sm font-mono font-bold text-gray-600 tracking-wider">{major.id}</span>
+                            </div>
+                            <div>
+                                <span className="text-[10px] text-gray-400 block mb-0.5">中职/本科院校</span>
+                                <span className="text-xs font-bold text-gray-700">{major.vocationalSchool} <span className="text-gray-300 mx-1">➔</span> {major.undergradSchool}</span>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-gray-100 mb-3">
+                             <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-gray-400">分数趋势 (23-25)</span>
+                                <div className="text-[10px] font-medium text-gray-500 space-x-2">
+                                    <span>23: {major.scores['2023'] || '-'}</span>
+                                    <span>24: {major.scores['2024'] || '-'}</span>
+                                    <span className="text-black font-bold">25: {major.scores['2025']}</span>
+                                </div>
+                             </div>
+                             <Sparkline scores={major.scores} />
+                        </div>
+
+                        <div className="flex justify-end gap-2">
+                             <button className="px-4 py-1.5 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-gray-600 shadow-sm"
+                                onClick={(e) => { e.stopPropagation(); setExpandedId(null); }}
+                             >
+                                收起
+                             </button>
+                        </div>
+                    </div>
+                )}
             </div>
           );
         })}
 
         {filtered.length > displayed.length && (
-          <button onClick={() => setPage(p => p + 1)} className="w-full py-4 text-[13px] font-bold text-gray-400 bg-white rounded-2xl shadow-sm hover:bg-gray-50 transition-all">
-            加载更多专业...
+          <button onClick={() => setPage(p => p + 1)} className="w-full py-3 text-[11px] font-bold text-gray-400 bg-gray-50 rounded-xl">
+            加载更多...
           </button>
-        )}
-        
-        {/* Empty State */}
-        {filtered.length === 0 && (
-          <div className="py-20 text-center">
-            <p className="text-gray-400 text-sm font-medium">没有找到符合条件的专业</p>
-          </div>
         )}
       </div>
     </div>

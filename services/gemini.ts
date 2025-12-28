@@ -1,26 +1,68 @@
 
 import { GoogleGenAI } from "@google/genai";
-import { UserProfile, Major, Category } from "../types";
+import { UserProfile, Major } from "../types";
 
-// Fixed: Correct initialization using named parameter and process.env.API_KEY directly.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-export async function generateRecommendation(user: UserProfile, favorites: Major[]) {
-  const prompt = `
-    你是一名上海中考升学专家。请基于以下学生数据生成一份“中本星航”AI 分析报告。
-    
-    学生档案：
-    - 姓名：${user.name} (${user.gender})
-    - 中考总分预估：${user.scores.total}/750 (语${user.scores.chinese} 数${user.scores.math} 英${user.scores.english} 物${user.scores.physics} 化${user.scores.chemistry} 史${user.scores.history} 政${user.scores.politics} 综${user.scores.comprehensive} 体${user.scores.physical})
-    - 性格测评代码：${user.mbtiResult || '未测试'}
-    - 目标收藏：${favorites.map(m => m.name).join(', ')}
+export async function generateRecommendation(user: UserProfile, favorites: Major[], quizAnswers?: string[]) {
+  const actualScore = user.scores.total > 0 ? user.scores.total : 650;
+  const isEstimated = user.scores.total === 0;
 
-    请严格按照以下4个部分输出（使用中文，语气专业且亲切）：
-    
-    1. 【核心性格画像】：基于 MBTI 对该少年的性格进行深度解读及未来本科适应性建议。
-    2. 【学科优劣势诊断】：结合分值，分析学生在理科工程或人文社科上的潜力，并指出具体的补强方向。
-    3. 【七大板块契合度看板】：列出该学生与经贸、电子、智造、艺术、服务、外语、医药这七类的匹配百分比（例如：智能制造 95%）。
-    4. 【2025 目标推荐】：综合分数竞争力和性格，从收藏夹或上海中本贯通库中推荐 Top 3 志愿，并给出具体的填报理由（冲/稳/保）。
+  // Simple weighted bias calc
+  let biasScore = 0; 
+  const scienceSubjects = ['math', 'physics', 'chemistry', 'physical'];
+  const artsSubjects = ['chinese', 'english', 'history', 'politics'];
+
+  Object.entries(user.subjectLikes || {}).forEach(([sub, type]) => {
+      if (type === 'like') {
+          if (scienceSubjects.includes(sub)) biasScore += 1;
+          if (artsSubjects.includes(sub)) biasScore -= 1;
+      } else if (type === 'dislike') {
+          if (scienceSubjects.includes(sub)) biasScore -= 1;
+          if (artsSubjects.includes(sub)) biasScore += 1;
+      }
+  });
+
+  let biasDescription = "均衡";
+  if (biasScore >= 2) biasDescription = "明显偏理";
+  if (biasScore <= -2) biasDescription = "明显偏文";
+
+  // Construct Quiz Data String for AI
+  const quizContext = quizAnswers && quizAnswers.length > 0
+    ? `Quiz Responses (Questions 1-8 are Personality/MBTI related, 9-20 are Vocational/Holland related):\n${quizAnswers.map((a, i) => `Q${i+1}: ${a}`).join('\n')}`
+    : 'No quiz taken.';
+
+  const prompt = `
+    Role: Senior Shanghai Zhongben Admissions Consultant.
+    Task: Analyze the student profile and return a JSON object ONLY.
+
+    Profile:
+    - Total Score: ${actualScore} ${isEstimated ? '(Estimated)' : ''}
+    - Arts/Science Bias: ${biasDescription} (Apply ~5% weight adjustment)
+    - Quiz Data: ${quizContext}
+    - Favorites: ${favorites.length > 0 ? favorites.map(m => m.name).join(', ') : 'None'}
+
+    Requirements:
+    1. Analyze the 20 quiz questions to determine the student's Personality (MBTI-like traits) and Vocational Interests (Holland Code/RIASEC).
+    2. Generate "radarData" specifically for the RIASEC model (Realistic, Investigative, Artistic, Social, Enterprising, Conventional). Values 0-100.
+    3. Provide a career planning advice section.
+    4. Recommend 3 specific majors.
+
+    Output Format: JSON ONLY. No markdown fencing.
+    Structure:
+    {
+      "personalitySummary": "Short analysis of personality & vocational interests (max 60 words).",
+      "radarData": [
+        { "subject": "R 现实型", "A": 85 },
+        { "subject": "I 研究型", "A": 60 },
+        { "subject": "A 艺术型", "A": 70 },
+        { "subject": "S 社会型", "A": 40 },
+        { "subject": "E 企业型", "A": 75 },
+        { "subject": "C 常规型", "A": 50 }
+      ],
+      "careerPlanning": "Detailed career advice and study path analysis (max 100 words).",
+      "recommendations": "3 specific major recommendations with reasons."
+    }
   `;
 
   try {
@@ -28,14 +70,12 @@ export async function generateRecommendation(user: UserProfile, favorites: Major
       model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
-        temperature: 0.8,
-        topP: 0.9,
+        responseMimeType: "application/json",
       }
     });
-    // Fixed: response.text is a property, already used correctly here.
     return response.text;
   } catch (error) {
     console.error("Gemini Error:", error);
-    return "抱歉，由于星际风暴干扰，AI 报告生成失败。请确保已设置有效的 API KEY 并检查网络。";
+    return null;
   }
 }

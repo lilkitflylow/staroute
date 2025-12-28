@@ -11,7 +11,8 @@ export enum Category {
 
 export interface Major {
   id: string;
-  name: string;
+  name: string; // Volunteer Name (e.g. 商会会计)
+  professionalName: string; // Professional Name (e.g. 会计学)
   category: Category;
   schoolCode: string;
   vocationalSchool: string;
@@ -27,8 +28,9 @@ export interface Major {
   vocCoord: { lat: number; lng: number };
   undergradCoord: { lat: number; lng: number };
   scores: {
-    '2023': { min: number; max: number };
-    '2024': { min: number; max: number };
+    '2023': number;
+    '2024': number;
+    '2025': number;
   };
 }
 
@@ -49,6 +51,7 @@ export interface UserProfile {
     physical: number;
     total: number;
   };
+  subjectLikes: Record<string, 'like' | 'dislike' | null>;
   mbtiResult?: string;
 }
 

@@ -16,23 +16,21 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab }) => {
   ];
 
   return (
-    <nav className="shrink-0 glass rounded-t-[40px] px-8 pt-4 pb-10 flex justify-between items-center shadow-[0_-10px_30px_rgba(0,0,0,0.02)] z-50 border-t border-white">
+    <nav className="shrink-0 bg-white/80 backdrop-blur-xl border-t border-gray-200 pb-safe pt-2 px-6 flex justify-between items-center z-50 rounded-t-[20px] shadow-[0_-5px_20px_rgba(0,0,0,0.03)]">
       {tabs.map((tab) => {
         const isActive = activeTab === tab.type;
         return (
           <button
             key={tab.type}
             onClick={() => setActiveTab(tab.type)}
-            className={`flex flex-col items-center gap-1.5 transition-all duration-300 ${
-              isActive ? 'scale-110 -translate-y-2' : 'opacity-40'
-            }`}
+            className={`flex flex-col items-center gap-1 p-2 transition-all duration-300 ${isActive ? 'translate-y-0' : 'translate-y-1'}`}
           >
-            <div className={`p-3 rounded-[20px] transition-all ${isActive ? 'bg-black text-white shadow-lg' : 'text-slate-900'}`}>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.8} d={tab.icon} />
+            <div className={`transition-all duration-300 ${isActive ? 'text-[#007AFF] scale-110' : 'text-[#8E8E93] scale-100'}`}>
+              <svg className="w-6 h-6" fill={isActive ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={tab.icon} />
               </svg>
             </div>
-            <span className={`text-[10px] font-black tracking-tighter ${isActive ? 'text-black' : 'text-slate-400'}`}>
+            <span className={`text-[10px] font-medium tracking-tight ${isActive ? 'text-[#007AFF]' : 'text-[#8E8E93]'}`}>
               {tab.label}
             </span>
           </button>
